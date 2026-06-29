@@ -41,6 +41,8 @@ Ensure that your source code file, an `input.txt` asset, and an `expected.txt` b
 | `tfy -d main.cpp` | **Debug Mode (`-O0 + ASAN`)** | Active tracebacks for Segfaults, leaks, and assertions. |
 | `tfy -t 5 main.cpp` | **Custom Deadline** | Manually sets execution ceiling (e.g., 5 seconds timeout). |
 
+---
+
 ### 💡 Workflow Optimization
 If you want to skip typing the filename entirely, update the default argument within the core script:
 
