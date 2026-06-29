@@ -1,59 +1,118 @@
-# tfy (Template For You) 🚀
+# tfy — Template For You 🚀
 
-![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
-![C++](https://img.shields.io/badge/Standard-C%2B%2B23-success)
-![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![C++ Standard](https://img.shields.io/badge/C%2B%2B-23-success?style=flat&logo=c%2B%2B)
+![Platform Support](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-black)
 
-A high-velocity, minimalist C++ testing pipeline tailored for competitive programming and local algorithmic execution. 
-
-`tfy` removes the friction of manual compilation and output verification. It automatically compiles your code, runs it against sample cases, catches runtime errors, and provides a clear, color-coded diff of your output versus the expected result.
-
-## ✨ Features
-
-* **Instant Compilation Modes:** Seamlessly switch between highly optimized Release builds (`-O3`) and deep Debug builds.
-* **Intelligent Output Diffing:** Compares your output against expected results line-by-line with clear visual indicators for mismatches.
-* **Deep Memory Debugging:** Built-in AddressSanitizer (ASAN) support to instantly track down Segfaults, memory leaks, and out-of-bounds errors.
-* **Safety Nets:** Automatic Time Limit Exceeded (TLE) enforcement and detailed crash tracebacks.
-* **Zero Dependencies:** A pure bash script that relies only on native tools (`g++` or `clang++`). Fully optimized for both Linux and macOS environments.
+A high-velocity, minimalist C++ testing pipeline engineered for competitive programming. `tfy` eliminates the overhead of manual compilation and output tracking by introducing automatic sample validation, real-time diffing, and integrated runtime diagnostics.
 
 ---
 
-## 📦 Install
+## ✨ Features
+
+* **Dual Engine:** Instantly toggle between hyper-optimized execution builds (`-O3`) and deep analytical runs.
+* **Granular Diffing:** Compares actual vs. expected streams line-by-line with sharp visual feedback.
+* **Deterministic Sandboxing:** Automatic enforcement against hanging scripts (**TLE**) and heavy memory faults.
+* **Hardwired Diagnostics:** Built-in hooks for AddressSanitizer (**ASAN**) to isolate out-of-bounds metrics and undefined behavior.
+* **Native Architecture:** Pure shell implementation. Zero bloat, zero runtime dependencies. Fully compatible with Apple Silicon and modern Linux distributions.
+
+---
+
+## 📦 Installation
+
+To deploy the binary globally on your system, execute the following block:
 
 ```bash
-git clone [https://github.com/YOUR_USERNAME/tfy-pipeline.git](https://github.com/YOUR_USERNAME/tfy-pipeline.git)
+git clone [https://github.com/devh0211/tfy-pipeline.git](https://github.com/devh0211/tfy-pipeline.git)
 cd tfy-pipeline
 chmod +x tfy
 sudo mv tfy /usr/local/bin/
 ```
 
-## 🚀 Usage
+---
 
-Make sure you created these files in same directory:
-1. input.txt
-2. expected.txt
-3. main.cpp 
+## 🚀 Execution & Core Usage
 
-**Run normally (Release mode / -O3):**
+Ensure that your source code file, an `input.txt` asset, and an `expected.txt` baseline target are present within your active working directory.
+
+| Command | Optimization Profile | Operational Target |
+| :--- | :--- | :--- |
+| `tfy main.cpp` | **Release Mode (`-O3`)** | Standard runtime evaluation and sample verification. |
+| `tfy -d main.cpp` | **Debug Mode (`-O0 + ASAN`)** | Active tracebacks for Segfaults, leaks, and assertions. |
+| `tfy -t 5 main.cpp` | **Custom Deadline** | Manually sets execution ceiling (e.g., 5 seconds timeout). |
+
+### 💡 Workflow Optimization
+If you want to skip typing the filename entirely, update the default argument within the core script:
+
+1. Locate the `tfy()` declaration wrapper in the source script.
+2. Update the First line of the function as follows:
 ```bash
-tfy main.cpp
+# Locate and modify this entry line:
+local opt_debug=0 opt_tlimit=2 opt_src="main.cpp"
+```
+Once updated, you can drop the explicit target parameter entirely:
+```bash
+tfy        # Runs Release on main.cpp
+tfy -d     # Runs Debug on main.cpp
+tfy -t 5   # Runs main.cpp with 5s timeout
 ```
 
-**Run with Memory Debugging (AddressSanitizer):**
-```bash
-tfy -d main.cpp
+---
+
+## ⚡ VS Code Keyboard Shortcuts (Highly Recommended)
+
+Instead of typing commands manually into the terminal before every submission, you can bind `tfy` to hotkeys inside Visual Studio Code using macros.
+
+### Setup Instructions
+1. Open VS Code.
+2. Open the Command Palette using `Cmd + Shift + P` (macOS) or `Ctrl + Shift + P` (Windows/Linux).
+3. Type and select: **Preferences: Open Keyboard Shortcuts (JSON)**.
+4. Paste the following configuration array into your `keybindings.json` file (if you already have existing shortcuts, append these entries inside your main outer brackets `[]`):
+
+```json
+[
+    {
+        "key": "cmd+alt+n",
+        "command": "workbench.action.terminal.sendSequence",
+        "args": {
+            "text": "tfy \u000D"
+        }
+    },
+    {
+        "key": "cmd+alt+b",
+        "command": "workbench.action.terminal.sendSequence",
+        "args": {
+            "text": "tfy -d \u000D"
+        }
+    },
+    {
+        "key": "cmd+alt+t",
+        "command": "workbench.action.terminal.sendSequence",
+        "args": {
+            "text": "tfy -t "
+        }
+    }
+]
 ```
 
-**Set custom Time Limit (e.g., 5 seconds):**
-```bash
-tfy -t 5 main.cpp
-```
+### Hotkey Mapping Index
+* **`Cmd + Alt + N`**: Instantly compiles and runs the **Release Pipeline** on your code target.
+* **`Cmd + Alt + B`**: Instantly triggers the **Debug Engine** with AddressSanitizer active.
+* **`Cmd + Alt + T`**: Prints `tfy -t ` to the terminal line, leaving your cursor active so you can immediately type a custom timeout integer.
 
-### NOTE:
-If you want to set main.cpp as default
-Change first line of tfy() function from
+*(Note: Linux users can substitute `"key": "ctrl+alt+..."` patterns if desired).*
 
-## ✨ Under the Hood
-* **Release:** `-std=c++23 -O3`
-* **Debug:** `-std=c++23 -g -O0 -fsanitize=address,undefined`
-* **Auto-detects** Segfaults, TLE (Timeout), and Floating Point Exceptions.
+---
+
+## 🛠 Low-Level Spec
+
+| Target Protocol | Active Flag Metrics | Trapped System Faults |
+| :--- | :--- | :--- |
+| **Release Pipeline** | `-std=c++23 -O3 -D_Alignof=alignof` | Time Limit Exceeded (`124`) |
+| **Debug Engine** | `-std=c++23 -g -O0 -fsanitize=address,undefined` | Segfault (`139`), FPE (`136`), Abort (`134`) |
+
+---
+
+## 📝 License
+
+Distributed under the terms of the open-source **MIT License**. For deep reference parameters, view the `LICENSE` document.
