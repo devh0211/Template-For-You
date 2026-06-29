@@ -6,6 +6,18 @@
 
 A high-velocity, minimalist C++ testing pipeline engineered for competitive programming. `tfy` eliminates the overhead of manual compilation and output tracking by introducing automatic sample validation, real-time diffing, and integrated runtime diagnostics.
 
+<table align="center" style="border-collapse: collapse; border: none;">
+  <tr style="border: none;">
+    <td align="center" style="border: none; padding: 10px;">
+      <img src="output.png" alt="tfy Terminal Demo" width="400"/><br/>
+      <strong>tfy</strong>
+    </td>
+    <td align="center" style="border: none; padding: 10px;">
+      <img src="error.png" alt="tfy -d Terminal Demo" width="550"/><br/>
+      <strong>tfy -d</strong>
+    </td>
+  </tr>
+</table>
 ---
 
 ## ✨ Features
