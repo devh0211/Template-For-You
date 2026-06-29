@@ -1,0 +1,243 @@
+# ──────────────────────────────────────
+#  tfy — Minimalist C++ Testing Pipeline
+# ──────────────────────────────────────
+
+_TFY_GRN='\033[1;32m'
+_TFY_RED='\033[1;31m'
+_TFY_YEL='\033[1;33m'
+_TFY_CYN='\033[1;36m'
+_TFY_RST='\033[0m' 
+
+_tfy_timeout() {
+    if command -v gtimeout >/dev/null 2>&1; then
+        gtimeout "$@"
+    else
+        timeout "$@"
+    fi
+}
+
+_tfy_compile() {
+    local src="$1" bin="$2" dbg="$3"
+    local err_out
+
+    if [[ "$dbg" == "1" ]]; then
+        local clang_flags="-std=c++23 -g -O0 -fsanitize=address,undefined"
+        export MACOSX_DEPLOYMENT_TARGET=$(sw_vers -ProductVersion)
+
+        if [ -n "$ZSH_VERSION" ]; then
+            err_out=$(clang++ $=clang_flags "$src" -o "$bin" 2>&1)
+        else
+            err_out=$(clang++ $clang_flags "$src" -o "$bin" 2>&1)
+        fi
+
+        if [ $? -ne 0 ]; then
+            echo -e "${_TFY_RED}✘ Compilation Failed (Debug)!${_TFY_RST}\n$err_out"
+            return 1
+        fi
+    else
+        local gcc_flags="-std=c++23 -O3 -D_Alignof=alignof"
+        if [ -n "$ZSH_VERSION" ]; then
+            err_out=$(g++ $=gcc_flags "$src" -o "$bin" 2>&1)
+        else
+            err_out=$(g++ $gcc_flags "$src" -o "$bin" 2>&1)
+        fi
+        
+        if [ $? -ne 0 ]; then   
+            echo -e "${_TFY_RED}✘ Compilation Failed (Release)!${_TFY_RST}\n$err_out"
+            return 1
+        fi
+    fi
+    return 0
+}
+
+_tfy_run_case() {
+    local bin="$1" inp="$2" exp="$3" out="$4" tlimit="$5" is_debug="$6" src_file="$7"
+    local err_file="/tmp/_tfy_err_$$"
+    local demangled_file="/tmp/_tfy_demangled_$$"
+    local src_name=$(basename "$src_file")
+          
+    ASAN_OPTIONS="symbolize=1:color=always" _tfy_timeout "$tlimit" "$bin" < "$inp" > "$out" 2> "$err_file"
+    local exit_code=$?
+        
+    [[ -s "$err_file" ]] && c++filt < "$err_file" > "$demangled_file"
+        
+    if [[ "$is_debug" == "1" ]]; then
+        # ==========================================================
+        # MODE B (tfy -d): STRICTLY INTERNAL ERROR CHECKING (ASAN)
+        # ==========================================================
+        local has_error=0
+        local summary_line=""
+        local triggered_lines=""
+          
+        if [[ -f "$demangled_file" ]]; then
+            if grep -qiE "SUMMARY:|ERROR:|runtime error:" "$demangled_file"; then
+                has_error=1
+                summary_line=$(grep -m 1 "SUMMARY:" "$demangled_file")
+                triggered_lines=$(grep -oE "${src_name}:[0-9]+" "$demangled_file" | sort -u)
+            fi
+        fi
+
+        if [[ $exit_code -ne 0 ]]; then   
+            has_error=1
+        fi
+
+        if [[ $has_error -eq 0 ]]; then
+            echo -e "\n  ${_TFY_GRN}✅ ALL CLEAR${_TFY_RST} \n"
+        else
+            echo -e "\n ${_TFY_RED}🚨 INTERNAL ERROR DETECTED${_TFY_RST}"
+            if [[ -f "$demangled_file" ]]; then
+                while IFS= read -r line; do
+                    if [[ "$line" == *"SUMMARY:"* ]]; then continue; fi
+                    if [[ "$line" == *"<unknown module>"* || "$line" == *"libc++abi.dylib"* ]]; then continue; fi
+        
+                    if [[ "$line" == *"${src_name}:"* ]]; then
+                        echo -e "  ${_TFY_CYN}${line}${_TFY_RST}"
+                    else
+                        echo -e "  ${line}"
+                    fi
+                done < "$demangled_file"
+            fi
+            if [[ -n "$summary_line" ]]; then
+                echo -e "\n  ${_TFY_RED}🚨 ${summary_line}${_TFY_RST}"
+                if [[ -n "$triggered_lines" ]]; then
+                    echo -e "  ${_TFY_YEL}📝 Line triggers:${_TFY_RST}"
+                    while IFS= read -r ln; do
+                        echo -e "      => ${ln}"
+                    done <<< "$triggered_lines"
+                fi
+            fi
+            echo ""
+        fi
+                
+        rm -f "$err_file" "$demangled_file" 2>/dev/null
+        return $exit_code
+        
+    else
+        # ==========================================================
+        # MODE A (tfy): OUTPUT, CERR & CRASH ALERTS (WITH CHECK FLAG)
+        # ==========================================================
+        local check_err=0
+        local err_name=""
+                    
+        if [[ $exit_code -eq 124 ]]; then
+            echo -e "\n  ${_TFY_RED}⏱ TLE / Time Limit Exceeded${_TFY_RST}"
+            rm -f "$err_file" "$demangled_file" 2>/dev/null
+            return 2
+        elif [[ $exit_code -ne 0 ]]; then
+            check_err=1
+            case $exit_code in
+                139) err_name="Segmentation Fault" ;;
+                136) err_name="Floating Point Exception" ;;
+                134) err_name="Aborted (Assertion)" ;;
+                137) err_name="Killed (Memory/OOM)" ;;
+                *)   err_name="Unknown Runtime Error ($exit_code)" ;;
+            esac   
+        fi
+        if [[ -f "$demangled_file" && -s "$demangled_file" ]]; then
+            local has_cerr=0
+            local cerr_output=""
+        
+            while IFS= read -r line; do
+                if [[ "$line" == *"<unknown module>"* || "$line" == *"libc++abi.dylib"* ]]; then continue; fi
+                if [[ -n "$(echo "$line" | tr -d '[:space:]')" ]]; then
+                    has_cerr=1
+                    cerr_output+="  ${_TFY_GRN}[c] ${_TFY_RST}${line}\n"
+                fi
+            done < "$demangled_file"
+            
+            if [[ $has_cerr -eq 1 ]]; then
+                echo -e "\n ${_TFY_YEL}<------Debug------->${_TFY_RST}"
+                echo -e -n "$cerr_output"
+                echo -e " ${_TFY_YEL}<------------------>${_TFY_RST}"
+            fi
+        fi
+        local is_wa=0
+        if ! diff -w -B "$exp" "$out" > /dev/null 2>&1; then
+            is_wa=1
+        fi
+        
+        echo -e "\n ${_TFY_CYN}<----Result---->${_TFY_RST}"
+        local _WHT='\033[1;37m' 
+        local _LBLU='\033[38;5;117m'
+        local _LRED='\033[38;5;208m'   
+        local line_count=0
+                
+        while true; do
+            read -r line_exp <&3
+            local eof_exp=$?
+            read -r line_out <&4
+            local eof_out=$?
+            
+            [[ $eof_exp -ne 0 && $eof_out -ne 0 ]] && break
+                
+            line_exp=${line_exp%$'\r'}
+            line_out=${line_out%$'\r'}
+          
+            if [[ "$line_exp" == "$line_out" ]]; then
+                echo -e "  ⭐️${_WHT}${line_exp}${_TFY_RST}"
+            else
+                local out_str="<EOF>"
+                local exp_str="<EOF>"
+                [[ $eof_out -eq 0 ]] && out_str="$line_out"
+                [[ $eof_exp -eq 0 ]] && exp_str="$line_exp"
+        
+                printf "  ${_LRED}% s ${_LBLU}%s${_TFY_RST}\n" "$out_str" "$exp_str"
+            fi
+        
+            ((line_count++))
+            if [[ $line_count -gt 50 ]]; then
+                echo -e "  ${_TFY_YEL}... (output truncated)${_TFY_RST}"
+                break
+            fi
+        done 3<"$exp" 4<"$out"
+        echo -e " ${_TFY_CYN}<-------------->${_TFY_RST}"  
+        
+        # ---------------------------------------------------------
+        # THE CHECK: Print the error message AFTER outputs
+        # ---------------------------------------------------------
+        if [[ $check_err -eq 1 ]]; then
+            echo -e "\n  ${_TFY_RED}💥 ${err_name}${_TFY_RST}"
+            echo -e "  ${_TFY_YEL}💡 Hint: Run 'tfy -d' for a detailed crash trace.${_TFY_RST}"
+        fi
+                
+    fi
+}
+
+tfy() {
+    local opt_debug=0 opt_tlimit=2 opt_src="cf.cpp"
+    
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -d|--debug)   opt_debug=1; shift ;;
+            -t|--time)    opt_tlimit="$2"; shift 2 ;;
+            *.cpp)        opt_src="$1"; shift ;;
+            *)            echo -e "${_TFY_RED}Unknown option: $1${_TFY_RST}"; return 1 ;;
+        esac
+    done
+    
+    if [[ ! -f "$opt_src" ]]; then
+        echo -e "${_TFY_RED}✘ Source file '$opt_src' not found!${_TFY_RST}"
+        return 1
+    fi
+    local bin="/tmp/_tfy_bin_$$"
+    local out="output.txt"
+
+    _tfy_compile "$opt_src" "$bin" "$opt_debug"
+    if [[ $? -ne 0 ]]; then
+        return 1
+    fi 
+
+    for f in input.txt expected.txt; do
+        if [[ ! -f "$f" ]]; then
+            echo -e "${_TFY_RED}✘ Missing required file: $f${_TFY_RST}"
+            rm -f "$bin"
+            return 1
+        fi
+    done
+
+    _tfy_run_case "$bin" "input.txt" "expected.txt" "$out" "$opt_tlimit" "$opt_debug" "$opt_src"
+    local rc=$?
+    
+    rm -f "$bin"
+    return $rc  
+}
