@@ -55,6 +55,8 @@ _tfy_run_case() {
     local err_file="/tmp/_tfy_err_$$"
     local demangled_file="/tmp/_tfy_demangled_$$"
     local src_name=$(basename "$src_file")
+
+    rm -f "$err_file" "$demangled_file" 2>/dev/null
           
     ASAN_OPTIONS="symbolize=1:color=always" _tfy_timeout "$tlimit" "$bin" < "$inp" > "$out" 2> "$err_file"
     local exit_code=$?
@@ -199,6 +201,8 @@ _tfy_run_case() {
             echo -e "\n  ${_TFY_RED}💥 ${err_name}${_TFY_RST}"
             echo -e "  ${_TFY_YEL}💡 Hint: Run 'tfy -d' for a detailed crash trace.${_TFY_RST}"
         fi
+
+        rm -f "$err_file" "$demangled_file" 2>/dev/null
                 
     fi
 }
